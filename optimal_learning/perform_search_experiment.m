@@ -3,21 +3,17 @@ function [results, elapsed] = perform_search_experiment(data, ...
           probability_bound, num_experiments, num_evaluations, ...
           max_lookahead, report)
 
-  stream = RandStream('mt19937ar', 'seed', seed);
-  RandStream.setDefaultStream(stream);
+  %stream = RandStream('mt19937ar', 'seed', seed);
+  %RandStream.setDefaultStream(stream);
 
   utility_function = @(data, responses, train_ind) ...
       count_utility(responses, train_ind);
 
-  expected_utility_function = @(data, responses, train_ind, test_ind) ...
-      expected_count_utility(data, responses, train_ind, test_ind, ...
-                             probability_function);
-
   selection_functions = cell(max_lookahead, 1);
   for i = 1:max_lookahead
     selection_functions{i} = @(data, responses, train_ind) ...
-        optimal_search_bound_selection_function(data, responses, ...
-            train_ind, probability_function, probability_bound, i);
+        optimal_search_bound_selector(data, responses, train_ind, ...
+            probability_function, probability_bound, i);
   end
 
   results = zeros(num_experiments, num_evaluations, max_lookahead);
@@ -29,18 +25,17 @@ function [results, elapsed] = perform_search_experiment(data, ...
     r = randperm(nnz(responses == 1));
     train_ind = logical_ind(responses == 1, r(1:(num_additional + 1)));
 
-    r = randperm(nnz(responses == 0));
-    train_ind = [train_ind; logical_ind(responses == 0, r(1:(num_additional + 1)))];
-    
+    r = randperm(nnz(responses ~=1));
+    train_ind = [train_ind; logical_ind(responses ~= 1, r(1:(num_additional + 1)))];
+
     for lookahead = 1:max_lookahead
-      start = tic;
+      %tic;
       [~, utilities] = optimal_learning(data, responses, train_ind, ...
-              selection_functions, probability_function, ...
-              expected_utility_function, utility_function, ...
-              num_evaluations, lookahead, true);
-      utilities = utilities - utility_function(data, responses, train_ind);
+              utility_function, probability_function, selection_functions, ...
+              lookahead, num_evaluations, true);
+      utilities = utilities - num_additional;
       results(experiment, :, lookahead) = utilities;
-      elapsed(experiment, lookahead) = toc(start);
+      %elapsed(experiment, lookahead) = toc(start);
 
       for i = 1:lookahead
         fprintf('experiment %i: %i-step utility: %i, mean: %.2f, took: %.2fs, mean: %.2fs', ...
