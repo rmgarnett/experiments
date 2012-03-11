@@ -8,13 +8,13 @@ if (options_defined)
 
   num_observations = size(data, 1);
 
-  responses = zeros(num_observations, 1);
+  responses = 2 * ones(num_observations, 1);
   responses(nips_index) = 1;
 
   if (~exist('probability_function', 'var'))
     setup_nips_knn;
   end
- 
+
   [results, elapsed] = perform_search_experiment(data, responses, ...
           num_additional, seed, probability_function, probability_bound, ...
           num_experiments, num_evaluations, max_lookahead, report);
