@@ -1,7 +1,7 @@
 data_directory = '~/work/data/biology/enzymes/processed/';
 load([data_directory 'enzymes']);
 
-num_graphs_to_keep = 10;
+num_graphs_to_keep = 50;
 
 D = sum(data);
 connected_nodes = (D > 0);
@@ -16,24 +16,26 @@ data = diag(D(to_keep)) \ data;
 
 num_graphs = max(graph_ind);
 
-train_ind = []; %zeros(num_graphs, 1);
+nodes_per_graph = 2;
+
+train_ind = [];
 for i = 1:num_graphs
   num_nodes = nnz(graph_ind == i);
   r = randperm(num_nodes);
-  nodes = r(1:1)';
+  nodes = r(1:nodes_per_graph);
   train_ind = [train_ind; logical_ind(graph_ind == i, nodes)];
 end
 
 h                    = 1;
-num_response_samples = 1000;
-num_test_samples     = 10;
+num_response_samples = 100;
+num_test_samples     = 100;
 num_evaluations      = 1000;
-lookahead            = 0;
+lookahead            = 1;
 verbose              = true;
 
 setup_mutag_lp;
 
-response_sampling_function = @(data, reponses, train_ind) ...
+response_sampling_function = @(data, reponses, train_ind, num_response_samples) ...
     independent_response_sampler(data, responses, train_ind, ...
         probability_function, num_response_samples);
 

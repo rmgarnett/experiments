@@ -14,10 +14,11 @@ function [log_likelihood, accuracy, confusion_matrix] = ...
   end
 
   [~, predictions] = max(probabilities, [], 2);
+
   confusion_matrix = sparse(predictions, responses(test_ind), ...
                             ones(num_test, 1), num_classes, num_classes);
   confusion_matrix = full(confusion_matrix);
 
   accuracy = sum(diag(confusion_matrix)) / num_test;
-
+  
 end
