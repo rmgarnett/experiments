@@ -91,4 +91,8 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, h)
 
     iteration = iteration + 1;
   end
+
+  normalizer = 1 ./ sqrt(diag(kernel_matrix));
+  kernel_matrix = bsxfun(@times, normalizer, bsxfun(@times, normalizer', ...
+          kernel_matrix));
 end
