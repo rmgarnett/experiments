@@ -39,12 +39,38 @@
 %
 % copyright (c) roman garnett, 2012.
 
-function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, h)
+function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, ...
+          train_graphs, test_graphs, h, normalize)
+
+  normalize = exist('normalize', 'var') && normalize;
+  if (normalize)
+    original_responses = responses;
+  end
+
+  used_graphs = union(train_graphs, test_graphs);
+
+  used_ind = false(size(data, 1), 1);
+  for i = 1:numel(used_graphs)
+    used_graph_ind = (graph_ind == used_graphs(i));
+
+    used_ind = used_ind | used_graph_ind;
+    graph_ind(used_graph_ind) = i;
+
+    train_graphs(train_graphs == used_graphs(i)) = i;
+    test_graphs(test_graphs   == used_graphs(i)) = i;
+  end
+
+  data      = data(used_ind, used_ind);
+  responses = responses(used_ind);
+  graph_ind(~used_ind) = 0;
+
+  num_train_graphs = numel(train_graphs);
+  num_test_graphs  = numel(test_graphs);
+  num_graphs       = numel(used_graphs);
 
   num_nodes = size(data, 1);
-  num_graphs = max(graph_ind);
 
-  kernel_matrix = zeros(num_graphs, num_graphs);
+  kernel_matrix = zeros(num_train_graphs, num_test_graphs);
 
   iteration = 0;
   while (true)
@@ -53,16 +79,17 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, h)
 
     % the contribution to the graph feature vectors at every step
     % is simply the counts of each node label on the graph
-    feature_vectors = zeros(num_graphs, num_labels);
+    feature_vectors = sparse(zeros(num_graphs, num_labels));
     for i = 1:num_graphs
       ind = (graph_ind == i);
       labels = responses(ind);
 
-      feature_vectors(i, :) = histc(labels, label_set);
+      feature_vectors(i, :) = sparse(histc(labels, label_set)');
     end
 
     % the kernel is the outer product of the feature vectors
-    kernel_matrix = kernel_matrix + feature_vectors * feature_vectors';
+    kernel_matrix = kernel_matrix + ...
+        feature_vectors(train_graphs, :) * feature_vectors(test_graphs, :)';
 
     % exit after h applications of the WL transformation
     if (iteration == h)
@@ -70,10 +97,10 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, h)
     end
 
     % perform the WL transformation
-    signatures = zeros(num_nodes, num_labels + 1);
+    signatures = zeros(num_nodes, num_labels + 1, 'uint8');
 
     % the first entry of each node's signature is its current label
-    signatures(:, 1) = responses;
+    signatures(:, 1) = uint8(responses);
 
     for i = 1:num_graphs
       % extract the labels and adjacency matrix for this graph only
@@ -83,7 +110,7 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, h)
       A = (A > 0);
 
       % the signatures are the counts of the labels surrounding each node
-      signatures(ind, 2:end) = histc(bsxfun(@times, A, labels), label_set)';
+      signatures(ind, 2:end) = uint8(histc(bsxfun(@times, A, labels), label_set)');
     end
 
     % perform signature compression
@@ -92,7 +119,23 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, h)
     iteration = iteration + 1;
   end
 
-  normalizer = 1 ./ sqrt(diag(kernel_matrix));
-  kernel_matrix = bsxfun(@times, normalizer, bsxfun(@times, normalizer', ...
-          kernel_matrix));
+  if (normalize)
+    train_variances = zeros(num_train_graphs, 1);
+    for i = 1:num_train_graphs
+      ind = (graph_ind == train_graphs(i));
+      train_variances(i) = wl_subtree_kernel(data(ind, ind), ...
+              original_responses(ind), ones(nnz(ind), 1), 1, 1, h, false);
+    end
+
+    test_variances = zeros(1, num_test_graphs);
+    for i = 1:num_test_graphs
+      ind = (graph_ind == test_graphs(i));
+      test_variances(i) = wl_subtree_kernel(data(ind, ind), ...
+              original_responses(ind), ones(nnz(ind), 1), 1, 1, h, false);
+    end
+
+    kernel_matrix = bsxfun(@times, 1 ./ sqrt(train_variances), ...
+                           bsxfun(@times, 1 ./ sqrt(test_variances), kernel_matrix));
+  end
+
 end
