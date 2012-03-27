@@ -3,7 +3,7 @@ check_required_options;
 
 if (options_defined)
 
-  data_directory = '~/work/github/data/images/processed/';
+  data_directory = '~/work/data/images/msrc/processed/';
   load([data_directory 'msrc_' int2str(num_msrc_classes) '_class.mat']);
 
   if (num_msrc_classes == 9)
@@ -32,4 +32,5 @@ if (options_defined)
 
   num_nodes   = size(data, 1);
   num_classes = max(responses);
+  num_graphs  = max(graph_ind);
 end

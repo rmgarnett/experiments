@@ -79,12 +79,12 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, ...
 
     % the contribution to the graph feature vectors at every step
     % is simply the counts of each node label on the graph
-    feature_vectors = sparse(zeros(num_graphs, num_labels));
+    feature_vectors = zeros(num_graphs, num_labels);
     for i = 1:num_graphs
       ind = (graph_ind == i);
       labels = responses(ind);
 
-      feature_vectors(i, :) = sparse(histc(labels, label_set)');
+      feature_vectors(i, :) = histc(labels, label_set)';
     end
 
     % the kernel is the outer product of the feature vectors
@@ -97,11 +97,11 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, ...
     end
 
     % perform the WL transformation
-    signatures = zeros(num_nodes, num_labels + 1, 'uint8');
+    signatures = zeros(num_nodes, num_labels + 1, 'uint16');
 
     % the first entry of each node's signature is its current label
-    signatures(:, 1) = uint8(responses);
-
+    signatures(:, 1) = responses;
+    
     for i = 1:num_graphs
       % extract the labels and adjacency matrix for this graph only
       ind = (graph_ind == i);
@@ -110,12 +110,13 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, ...
       A = (A > 0);
 
       % the signatures are the counts of the labels surrounding each node
-      signatures(ind, 2:end) = uint8(histc(bsxfun(@times, A, labels), label_set)');
+      signatures(ind, 2:end) = histc(bsxfun(@times, A, labels), label_set)';
     end
 
     % perform signature compression
-    [~, ~, responses] = unique(signatures, 'rows');
-
+    % [~, ~, responses] = unique(signatures, 'rows');
+    responses = compress_signatures(signatures);
+    
     iteration = iteration + 1;
   end
 
