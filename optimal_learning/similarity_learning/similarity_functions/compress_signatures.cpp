@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <sparsehash/dense_hash_map>
 #include <tr1/functional>
 
@@ -10,6 +11,7 @@ using google::dense_hash_map;
 using std::cout;
 using std::endl;
 using std::tr1::hash;
+using std::ostringstream;
 using std::string;
 
 void mexFunction(int nlhs, mxArray *plhs[],
@@ -33,23 +35,20 @@ void mexFunction(int nlhs, mxArray *plhs[],
 
 	num_signatures = 0;
 	for (i = 0; i < num_rows; i++) {
-		string this_signature = "";
+		ostringstream this_signature;
 		
 		for (j = 0; j < num_columns; j++) {
 			entry = signatures[i + num_rows * j];
 			if (entry > 0) {
-			  this_signature += j;
-				this_signature += " ";
-				this_signature += entry;
-				this_signature += " ";
+			  this_signature << j << " " << entry << " ";
 			}
 		}
 	
-		if (signature_hash[this_signature] == 0) {
+		if (signature_hash[this_signature.str().c_str()] == 0) {
 			num_signatures++;
-			signature_hash[this_signature] = num_signatures;
+			signature_hash[this_signature.str().c_str()] = num_signatures;
 		}
 
-		new_responses[i] = signature_hash[this_signature];
+		new_responses[i] = signature_hash[this_signature.str().c_str()];
 	}
 }
