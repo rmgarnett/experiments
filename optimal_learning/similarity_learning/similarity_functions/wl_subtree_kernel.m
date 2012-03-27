@@ -43,9 +43,6 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, ...
           train_graphs, test_graphs, h, normalize)
 
   normalize = exist('normalize', 'var') && normalize;
-  if (normalize)
-    original_responses = responses;
-  end
 
   used_graphs = union(train_graphs, test_graphs);
 
@@ -68,13 +65,16 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, ...
   num_test_graphs  = numel(test_graphs);
   num_graphs       = numel(used_graphs);
 
-  num_nodes = size(data, 1);
-
+  if (normalize)
+    train_variances = zeros(num_train_graphs, 1);
+    test_variances = zeros(1, num_test_graphs);
+  end
+  
   kernel_matrix = zeros(num_train_graphs, num_test_graphs);
 
   iteration = 0;
   while (true)
-    label_set = unique(responses);
+    label_set = 1:max(responses); % unique(responses);
     num_labels = numel(label_set);
 
     % the contribution to the graph feature vectors at every step
@@ -91,50 +91,29 @@ function kernel_matrix = wl_subtree_kernel(data, responses, graph_ind, ...
     kernel_matrix = kernel_matrix + ...
         feature_vectors(train_graphs, :) * feature_vectors(test_graphs, :)';
 
+    if (normalize)
+      for i = 1:num_train_graphs
+        train_variances(i) = train_variances(i) + ...
+            feature_vectors(train_graphs(i), :) * feature_vectors(train_graphs(i), :)';
+      end
+      for i = 1:num_test_graphs
+        test_variances(i) = test_variances(i) + ...
+            feature_vectors(test_graphs(i), :) * feature_vectors(test_graphs(i), :)';
+      end
+    end
+    
     % exit after h applications of the WL transformation
     if (iteration == h)
       break;
     end
 
-    % perform the WL transformation
-    signatures = zeros(num_nodes, num_labels + 1, 'uint16');
-
-    % the first entry of each node's signature is its current label
-    signatures(:, 1) = responses;
-    
-    for i = 1:num_graphs
-      % extract the labels and adjacency matrix for this graph only
-      ind = (graph_ind == i);
-      labels = responses(ind);
-      A = full(data(ind, ind));
-      A = (A > 0);
-
-      % the signatures are the counts of the labels surrounding each node
-      signatures(ind, 2:end) = histc(bsxfun(@times, A, labels), label_set)';
-    end
-
-    % perform signature compression
-    % [~, ~, responses] = unique(signatures, 'rows');
-    responses = compress_signatures(signatures);
+    % perform the WL transformation and compression
+    responses = compress_signatures(create_signatures(data, responses));
     
     iteration = iteration + 1;
   end
 
   if (normalize)
-    train_variances = zeros(num_train_graphs, 1);
-    for i = 1:num_train_graphs
-      ind = (graph_ind == train_graphs(i));
-      train_variances(i) = wl_subtree_kernel(data(ind, ind), ...
-              original_responses(ind), ones(nnz(ind), 1), 1, 1, h, false);
-    end
-
-    test_variances = zeros(1, num_test_graphs);
-    for i = 1:num_test_graphs
-      ind = (graph_ind == test_graphs(i));
-      test_variances(i) = wl_subtree_kernel(data(ind, ind), ...
-              original_responses(ind), ones(nnz(ind), 1), 1, 1, h, false);
-    end
-
     kernel_matrix = bsxfun(@times, 1 ./ sqrt(train_variances), ...
                            bsxfun(@times, 1 ./ sqrt(test_variances), kernel_matrix));
   end
