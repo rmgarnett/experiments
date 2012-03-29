@@ -1,10 +1,9 @@
 prepare_msrc_data;
 setup_msrc_lp;
 
-num_train_per_graph  = 50;
+num_train_per_graph  = 10;
 num_response_samples = 100;
-num_test_samples     = 1;
-h                    = 1;
+h                    = 2;
 lookahead            = 1;
 num_evaluations      = 10;
 verbose              = true;
@@ -14,9 +13,11 @@ test_image_ind       = unique(graph_ind(graph_ind ~= train_image_ind));
 
 train_ind = logical_ind(graph_ind == train_image_ind, 1);
 for i = 1:numel(test_image_ind)
-  num_nodes = nnz(graph_ind == test_image_ind(i));
+  ind = graph_ind == test_image_ind(i);
+  num_nodes = nnz(ind);
   permutation = randperm(num_nodes)';
-  train_ind = [train_ind; permutation(1:min(num_nodes, num_train_per_graph))];
+  train_ind = [train_ind;
+               logical_ind(ind, permutation(1:min(num_nodes, num_train_per_graph)))];
 end
 
 response_sampling_function = @(data, reponses, train_ind, num_samples) ...
