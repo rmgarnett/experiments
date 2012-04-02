@@ -1,5 +1,5 @@
 #include "mex.h"
-#include "matrix.h"
+//#include "matrix.h"
 
 #include <math.h>
 
@@ -60,7 +60,7 @@ void mexFunction(int nlhs, mxArray *plhs[],
 		*probabilities_in, *probabilities, *num_samples_in;
 	int *labels;
 	int h, num_samples;
-	
+
 	/* outputs */
 	double *means, *variances;
 
@@ -72,7 +72,7 @@ void mexFunction(int nlhs, mxArray *plhs[],
 	unordered_map<double, int, hash<double> > signature_hash;
 
 	clock_t start = clock();
-	
+
 	/* get inputs */
 	A_ir              = mxGetIr(A_ARG);
 	A_jc              = mxGetJc(A_ARG);
@@ -87,7 +87,7 @@ void mexFunction(int nlhs, mxArray *plhs[],
 	/* dereference to avoid annoying casting and indexing */
 	h = (int)(h_in[0] + 0.5);
 	num_samples = (int)(num_samples_in[0] + 0.5);
-	
+
 	/* array sizes */
 	num_nodes        = mxGetN(A_ARG);
 	num_train_graphs = mxGetN(TRAIN_GRAPH_IND_ARG) * mxGetM(TRAIN_GRAPH_IND_ARG);
@@ -126,43 +126,43 @@ void mexFunction(int nlhs, mxArray *plhs[],
 	random_offsets            = NULL;
 	samples                   = NULL;
 	signatures                = NULL;
-	
+
 	iteration = 0;
 	while (true) {
 
 		count_means               = (double *)(mxRealloc(count_means,               num_graphs * num_labels * sizeof(double)));
 		count_variances           = (double *)(mxRealloc(count_variances,           num_graphs * num_labels * sizeof(double)));
 		sum_probabilities_squared = (double *)(mxRealloc(sum_probabilities_squared, num_graphs * num_labels * sizeof(double)));
-	
-		for (i = 0; i < num_graphs; i++) 
+
+		for (i = 0; i < num_graphs; i++)
 			for (j = 0; j < num_labels; j++) {
 				count_means[INDEX(i, j, num_graphs)]               = 0;
 				sum_probabilities_squared[INDEX(i, j, num_graphs)] = 0;
 		}
-		
-		for (i = 0; i < num_nodes; i++) 
+
+		for (i = 0; i < num_nodes; i++)
 			for (j = 0; j < num_labels; j++) {
 				count_means[INDEX(graph_ind[i] - 1, j, num_graphs)]                += probabilities[INDEX(i, j, num_nodes)];
 				sum_probabilities_squared[INDEX(graph_ind[i] - 1, j, num_graphs)]  += probabilities[INDEX(i, j, num_nodes)] *
 				 	                                                                    probabilities[INDEX(i, j, num_nodes)];
-			} 
+			}
 
-		for (i = 0; i < num_graphs; i++) 
+		for (i = 0; i < num_graphs; i++)
 			for (j = 0; j < num_labels; j++) {
 				count_variances[INDEX(i, j, num_graphs)] =
 					count_means[INDEX(i, j, num_graphs)] * (1 - count_means[INDEX(i, j, num_graphs)] / num_nodes) -
 					(sum_probabilities_squared[INDEX(i, j, num_graphs)] -
 					 count_means[INDEX(i, j, num_graphs)] * count_means[INDEX(i, j, num_graphs)] / num_nodes);
 			}
-				
+
 		for (i = 0; i < num_train_graphs; i++)
  			for (j = 0; j < num_test_graphs; j++)
 				for (k = 0; k < num_labels; k++) {
-					
+
 					means[INDEX(i, j, num_train_graphs)] +=
 						count_means[INDEX(train_graph_ind[i] - 1, k, num_graphs)] *
 						count_means[INDEX( test_graph_ind[j] - 1, k, num_graphs)];
-				
+
 					variances[INDEX(i, j, num_train_graphs)] +=
 						count_means    [INDEX(train_graph_ind[i] - 1, k, num_graphs)] *
 						count_means    [INDEX(train_graph_ind[i] - 1, k, num_graphs)] *
@@ -175,8 +175,6 @@ void mexFunction(int nlhs, mxArray *plhs[],
 						count_variances[INDEX(train_graph_ind[i] - 1, k, num_graphs)] *
 						count_variances[INDEX( test_graph_ind[j] - 1, k, num_graphs)];
 				}
-		
-		cout << "momented " << (double)(clock() - start) / CLOCKS_PER_SEC << endl;
 
 		if (iteration == h)
 			break;
@@ -190,15 +188,13 @@ void mexFunction(int nlhs, mxArray *plhs[],
 
 		generate_samples(num_nodes, num_samples, num_labels, probabilities, samples);
 
-		cout << "generated " << (double)(clock() - start) / CLOCKS_PER_SEC << endl;
-
 		for (i = 0; i < num_nodes; i++) {
 			for (j = 0; j < num_samples; j++) {
 				signatures[INDEX(i, j, num_nodes)] = samples[INDEX(i, j, num_nodes)];
 
 				count = 0;
 				for (column = 0; column < num_nodes; column++) {
-					
+
 					num_elements_this_column = A_jc[column + 1] - A_jc[column];
 					for (k = 0; k < num_elements_this_column; k++, count++) {
 						row = A_ir[count];
@@ -207,15 +203,13 @@ void mexFunction(int nlhs, mxArray *plhs[],
 				}
 			}
 		}
-		
+
 		num_labels = 0;
 		for (i = 0; i < num_nodes; i++)
 			for (j = 0; j < num_samples; j++)
 				if (signature_hash.count(signatures[INDEX(i, j, num_nodes)]) == 0)
 					signature_hash[signatures[INDEX(i, j, num_nodes)]] = num_labels++;
 
-		cout << "hashed " << (double)(clock() - start) / CLOCKS_PER_SEC << endl;
-		
 		probabilities = (double *)(mxRealloc(probabilities, num_nodes * num_labels * sizeof(double)));
 		for (i = 0; i < num_nodes; i++)
 			for (j = 0; j < num_labels; j++)
@@ -225,10 +219,8 @@ void mexFunction(int nlhs, mxArray *plhs[],
 			for (j = 0; j < num_samples; j++)
 				probabilities[INDEX(i, signature_hash[signatures[INDEX(i, j, num_nodes)]], num_nodes)] += (1 / num_samples);
 
-		cout << "probabilitied " << (double)(clock() - start) / CLOCKS_PER_SEC << endl;
-
 		signature_hash.empty();
-		
+
 		iteration++;
 	}
 
@@ -239,14 +231,14 @@ void mexFunction(int nlhs, mxArray *plhs[],
 	mxFree(random_offsets);
 	mxFree(samples);
 	mxFree(signatures);
-	
+
 }
 
 void generate_samples(int num_nodes, int num_samples, int num_labels, double *probabilities, int *samples)
 {
 	int i, j, k;
 	double r, total;
-	
+
 	for (i = 0; i < num_nodes; i++) {
 		for (j = 0; j < num_samples; j++) {
 			r = uniform_rand();
