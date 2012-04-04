@@ -1,37 +1,45 @@
 #include "mex.h"
 //#include "matrix.h"
 
-#include <iostream>
 #include <math.h>
 
-#include <tr1/functional>
-#include <tr1/unordered_map>
-
-#include <boost/random.hpp>
-#include <boost/random/variate_generator.hpp>
-
+#include <iostream>
 using std::cout;
 using std::endl;
 
+#include <tr1/functional>
+#include <tr1/unordered_map>
 using std::tr1::hash;
 using std::tr1::unordered_map;
 
+#include <boost/random.hpp>
+#include <boost/random/variate_generator.hpp>
 using boost::uniform_real;
 using boost::variate_generator;
 
 typedef boost::mt19937 base_generator_type;
 
-#define INDEX(row, column, num_rows) ((int)(row) + ((int)(num_rows) * (int)(column)))
+/* convenience macros for input/output indices in case we want to change */
+#define A_ARG               prhs[0]
+#define LABELS_ARG          prhs[1]
+#define GRAPH_IND_ARG       prhs[2]
+#define TRAIN_GRAPH_IND_ARG prhs[3]
+#define TEST_GRAPH_IND_ARG  prhs[4]
+#define H_ARG               prhs[5]
+#define NORMALIZE_ARG       prhs[6]
 
-/* [kernel_matrix, train_variances, test_variances] =
-    	 wl_subtree_kernel_mex(graph_ind, responses, train_graphs, test_graphs, normalize) */
+#define KERNEL_MATRIX_ARG   plhs[0]
+
+#define INDEX(row, column, num_rows) ((int)(row) + ((int)(num_rows) * (int)(column)))
 
 void mexFunction(int nlhs, mxArray *plhs[],
 								 int nrhs, const mxArray *prhs[])
 {
-	mwIndex *data_ir, *data_jc;
-	double *graph_ind, *responses, *train_graphs, *test_graphs, *h, *kernel_matrix;
-	mxLogical *normalize;
+	mwIndex *A_ir, *A_jc;
+	double *graph_ind, *labels_in, *train_graphs, *test_graphs, *h_in, *kernel_matrix;
+	mxLogical *normalize_in;
+	int h, *labels;
+	bool normalize;
 
 	int i, j, k, row, column, count, iteration, num_nodes, num_labels, num_graphs,
 		num_train_graphs, num_test_graphs, num_elements_this_column, *new_responses,
@@ -47,42 +55,48 @@ void mexFunction(int nlhs, mxArray *plhs[],
 	boost::variate_generator<base_generator_type&, boost::uniform_real<double> >
 		rand(generator, uniform_distribution);
 
-	data_ir = mxGetIr(prhs[0]);
-	data_jc = mxGetJc(prhs[0]);
-	num_nodes = mxGetM(prhs[0]);
+	A_ir         = mxGetIr(A_ARG);
+	A_jc         = mxGetJc(A_ARG);
 
-	responses    = mxGetPr(prhs[1]);
+	labels_in    = mxGetPr(LABELS_ARG);
 
-	graph_ind    = mxGetPr(prhs[2]);
-	train_graphs = mxGetPr(prhs[3]);
-	test_graphs  = mxGetPr(prhs[4]);
-	h            = mxGetPr(prhs[5]);
-	normalize    = mxGetLogicals(prhs[6]);
+	graph_ind    = mxGetPr(GRAPH_IND_ARG);
+	train_graphs = mxGetPr(TRAIN_GRAPH_IND_ARG);
+	test_graphs  = mxGetPr(TEST_GRAPH_IND_ARG);
+	h_in         = mxGetPr(H_ARG);
+	normalize_in = mxGetLogicals(NORMALIZE_ARG);
 
-	num_train_graphs = mxGetN(prhs[3]) * mxGetM(prhs[3]);
-	num_test_graphs  = mxGetN(prhs[4]) * mxGetM(prhs[4]);
+	/* dereference to avoid annoying casting and indexing */
+	h         = (int)(h_in[0] + 0.5);
+	normalize = normalize_in[0];
 
-	plhs[0] = mxCreateDoubleMatrix(num_train_graphs, num_test_graphs, mxREAL);
-	kernel_matrix = mxGetPr(plhs[0]);
+	/* array sizes */
+	num_nodes        = mxGetN(A_ARG);
+	num_train_graphs = mxGetN(TRAIN_GRAPH_IND_ARG) * mxGetM(TRAIN_GRAPH_IND_ARG);
+	num_test_graphs  = mxGetN(TEST_GRAPH_IND_ARG) * mxGetM(TEST_GRAPH_IND_ARG);
+
+	KERNEL_MATRIX_ARG = mxCreateDoubleMatrix(num_train_graphs, num_test_graphs, mxREAL);
+	kernel_matrix = mxGetPr(KERNEL_MATRIX_ARG);
+
+	/* copy label matrix because we will overwrite it */
+	labels = (int *)(mxMalloc(num_nodes * sizeof(int)));
+	for (i = 0; i < num_nodes; i++)
+		labels[i] = (int)(labels_in[i] + 0.5);
 
 	num_labels = 0;
 	num_graphs = 0;
 	for (i = 0; i < num_nodes; i++) {
-		if (responses[i] > num_labels)
-			num_labels = (int)(responses[i]);
-		if (graph_ind[i] > num_graphs)
-			num_graphs = (int)(graph_ind[i]);
+		if (labels[i] > num_labels)
+			num_labels = (int)(labels[i]);
+		if ((int)(graph_ind[i]) > num_graphs)
+			num_graphs = (int)(graph_ind[i]) + 0.5;
 	}
-
-	new_responses = (int *)(mxMalloc(num_nodes * sizeof(int)));
-	for (i = 0; i < num_nodes; i++)
-		new_responses[i] = (int)(responses[i] + 0.5);
 
 	feature_vectors = NULL;
 	random_offsets = NULL;
 	signatures = (double *)(mxMalloc(num_nodes * sizeof(double)));
 
-	if (normalize[0] == true) {
+	if (normalize) {
 		train_variances = (double *)(mxMalloc(num_graphs * sizeof(double)));
 		test_variances =  (double *)(mxMalloc(num_graphs * sizeof(double)));
 	}
@@ -91,29 +105,29 @@ void mexFunction(int nlhs, mxArray *plhs[],
 	while (true) {
 
 		feature_vectors = (int *)(mxRealloc(feature_vectors, num_graphs * num_labels * sizeof(int)));
-		for (i = 0; i < num_graphs; i++)
-			for (j = 0; j < num_labels; j++)
+		for (j = 0; j < num_labels; j++)
+			for (i = 0; i < num_graphs; i++)
 				feature_vectors[INDEX(i, j, num_graphs)] = 0;
 
 		for (i = 0; i < num_nodes; i++)
-			feature_vectors[INDEX(graph_ind[i] - 1, new_responses[i] - 1, num_graphs)]++;
+			feature_vectors[INDEX(graph_ind[i] - 1, labels[i] - 1, num_graphs)]++;
 
-		if (normalize[0] == true) {
-			for (i = 0; i < num_train_graphs; i++)
-				for (j = 0; j < num_labels; j++)
+		if (normalize) {
+			for (j = 0; j < num_labels; j++)
+				for (i = 0; i < num_train_graphs; i++)
 					train_variances[i] +=
 						feature_vectors[INDEX(train_graphs[i] - 1, j, num_graphs)] *
 						feature_vectors[INDEX(train_graphs[i] - 1, j, num_graphs)];
 
-			for (i = 0; i < num_test_graphs; i++)
-				for (j = 0; j < num_labels; j++)
+			for (j = 0; j < num_labels; j++)
+				for (i = 0; i < num_test_graphs; i++)
 					test_variances[i] +=
 						feature_vectors[INDEX(test_graphs[i] - 1, j, num_graphs)] *
 						feature_vectors[INDEX(test_graphs[i] - 1, j, num_graphs)];
 		}
 
-		for (i = 0; i < num_train_graphs; i++)
-			for (j = 0; j < num_test_graphs; j++)
+		for (j = 0; j < num_test_graphs; j++)
+			for (i = 0; i < num_train_graphs; i++)
 				for (k = 0; k < num_labels; k++) {
 					if ((feature_vectors[INDEX(train_graphs[i] - 1, k, num_graphs)] > 0) &&
 							(feature_vectors[INDEX(test_graphs[j]  - 1, k, num_graphs)] > 0)) {
@@ -123,7 +137,7 @@ void mexFunction(int nlhs, mxArray *plhs[],
 					}
 				}
 
-		if (iteration == (int)(h[0]))
+		if (iteration == h)
 			break;
 
 		random_offsets = (double *)(mxRealloc(random_offsets, num_labels * sizeof(double)));
@@ -131,15 +145,15 @@ void mexFunction(int nlhs, mxArray *plhs[],
 			random_offsets[i] = rand();
 
 		for (i = 0; i < num_nodes; i++)
-			signatures[i] = (double)(new_responses[i]);
+			signatures[i] = (double)(labels[i]);
 
-		count = 0;
+ 		count = 0;
 		for (column = 0; column < num_nodes; column++) {
 
-			num_elements_this_column = data_jc[column + 1] - data_jc[column];
+			num_elements_this_column = A_jc[column + 1] - A_jc[column];
 			for (i = 0; i < num_elements_this_column; i++, count++) {
-				row = data_ir[count];
-				signatures[row] += random_offsets[new_responses[column] - 1];
+				row = A_ir[count];
+				signatures[row] += random_offsets[labels[column] - 1];
 			}
 		}
 
@@ -149,24 +163,36 @@ void mexFunction(int nlhs, mxArray *plhs[],
 			if (signature_hash.count(signatures[i]) == 0)
 				signature_hash[signatures[i]] = ++num_labels;
 
-			new_responses[i] = signature_hash[signatures[i]];
+			labels[i] = signature_hash[signatures[i]];
 		}
 		signature_hash.empty();
 
 		iteration++;
 	}
 
-	if (normalize[0] == true)
-		for (i = 0; i < num_train_graphs; i++)
-			for (j = 0; j < num_test_graphs; j++)
+	cout << "count: " << count;
+	cout << "{";
+	for (i = 0; i < count; i++)
+		cout << A_ir[i] << ", ";
+	cout << "};" << endl;
+
+	cout << "{";
+	for (i = 0; i < num_nodes + 1; i++)
+		cout << A_jc[i] << ", ";
+	cout << "};" << endl;
+
+	if (normalize)
+		for (j = 0; j < num_test_graphs; j++)
+			for (i = 0; i < num_train_graphs; i++)
 				kernel_matrix[INDEX(i, j, num_train_graphs)] *=
 					(1 / sqrt(train_variances[i] * test_variances[j]));
 
-	mxFree(new_responses);
+	mxFree(labels);
 	mxFree(feature_vectors);
 	mxFree(random_offsets);
 	mxFree(signatures);
-	mxFree(train_variances);
-	mxFree(test_variances);
-
+	if (normalize) {
+		mxFree(train_variances);
+		mxFree(test_variances);
+	}
 }

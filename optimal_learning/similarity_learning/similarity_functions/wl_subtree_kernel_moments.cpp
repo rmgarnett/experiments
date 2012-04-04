@@ -71,8 +71,6 @@ void mexFunction(int nlhs, mxArray *plhs[],
 	double *count_means, *count_variances, *sum_probabilities_squared, *random_offsets, *signatures, r, total;
 	unordered_map<double, int, hash<double> > signature_hash;
 
-	clock_t start = clock();
-
 	/* get inputs */
 	A_ir              = mxGetIr(A_ARG);
 	A_jc              = mxGetJc(A_ARG);
@@ -116,8 +114,8 @@ void mexFunction(int nlhs, mxArray *plhs[],
 
 	/* copy probability matrix because we will overwrite it */
 	probabilities = (double *)(mxMalloc(num_nodes * num_labels * sizeof(double)));
-	for (i = 0; i < num_nodes; i++)
-		for (j = 0; j < num_labels; j++)
+	for (j = 0; j < num_labels; j++)
+		for (i = 0; i < num_nodes; i++)
 			probabilities[INDEX(i, j, num_nodes)] = probabilities_in[INDEX(i, j, num_nodes)];
 
 	count_means               = NULL;
@@ -134,26 +132,26 @@ void mexFunction(int nlhs, mxArray *plhs[],
 		count_variances           = (double *)(mxRealloc(count_variances,           num_graphs * num_labels * sizeof(double)));
 		sum_probabilities_squared = (double *)(mxRealloc(sum_probabilities_squared, num_graphs * num_labels * sizeof(double)));
 
-		for (i = 0; i < num_graphs; i++)
-			for (j = 0; j < num_labels; j++) {
-				count_means[INDEX(i, j, num_graphs)]               = 0;
-				sum_probabilities_squared[INDEX(i, j, num_graphs)] = 0;
-		}
+			for (j = 0; j < num_labels; j++)
+				for (i = 0; i < num_graphs; i++) {
+					count_means[INDEX(i, j, num_graphs)]               = 0;
+					sum_probabilities_squared[INDEX(i, j, num_graphs)] = 0;
+				}
 
-		for (i = 0; i < num_nodes; i++)
-			for (j = 0; j < num_labels; j++) {
+			for (j = 0; j < num_labels; j++)
+				for (i = 0; i < num_nodes; i++) {
 				count_means[INDEX(graph_ind[i] - 1, j, num_graphs)]                += probabilities[INDEX(i, j, num_nodes)];
 				sum_probabilities_squared[INDEX(graph_ind[i] - 1, j, num_graphs)]  += probabilities[INDEX(i, j, num_nodes)] *
 				 	                                                                    probabilities[INDEX(i, j, num_nodes)];
 			}
 
-		for (i = 0; i < num_graphs; i++)
-			for (j = 0; j < num_labels; j++) {
-				count_variances[INDEX(i, j, num_graphs)] =
-					count_means[INDEX(i, j, num_graphs)] * (1 - count_means[INDEX(i, j, num_graphs)] / num_nodes) -
-					(sum_probabilities_squared[INDEX(i, j, num_graphs)] -
-					 count_means[INDEX(i, j, num_graphs)] * count_means[INDEX(i, j, num_graphs)] / num_nodes);
-			}
+			for (j = 0; j < num_labels; j++)
+				for (i = 0; i < num_graphs; i++) {
+					count_variances[INDEX(i, j, num_graphs)] =
+						count_means[INDEX(i, j, num_graphs)] * (1 - count_means[INDEX(i, j, num_graphs)] / num_nodes) -
+						(sum_probabilities_squared[INDEX(i, j, num_graphs)] -
+						 count_means[INDEX(i, j, num_graphs)] * count_means[INDEX(i, j, num_graphs)] / num_nodes);
+				}
 
 		for (i = 0; i < num_train_graphs; i++)
  			for (j = 0; j < num_test_graphs; j++)
@@ -188,35 +186,37 @@ void mexFunction(int nlhs, mxArray *plhs[],
 
 		generate_samples(num_nodes, num_samples, num_labels, probabilities, samples);
 
-		for (i = 0; i < num_nodes; i++) {
-			for (j = 0; j < num_samples; j++) {
-				signatures[INDEX(i, j, num_nodes)] = samples[INDEX(i, j, num_nodes)];
+		for (j = 0; j < num_samples; j++)
+			for (i = 0; i < num_nodes; i++)
+			signatures[INDEX(i, j, num_nodes)] = samples[INDEX(i, j, num_nodes)];
 
-				count = 0;
-				for (column = 0; column < num_nodes; column++) {
+		count = 0;
+		for (column = 0; column < num_nodes; column++) {
 
-					num_elements_this_column = A_jc[column + 1] - A_jc[column];
-					for (k = 0; k < num_elements_this_column; k++, count++) {
-						row = A_ir[count];
+			num_elements_this_column = A_jc[column + 1] - A_jc[column];
+			for (k = 0; k < num_elements_this_column; k++, count++) {
+				row = A_ir[count];
+				for (j = 0; j < num_samples; j++)
+					for (i = 0; i < num_nodes; i++)
 						signatures[INDEX(row, j, num_nodes)] += random_offsets[samples[INDEX(i, j, num_nodes)]];
-					}
-				}
 			}
 		}
 
 		num_labels = 0;
-		for (i = 0; i < num_nodes; i++)
-			for (j = 0; j < num_samples; j++)
+		for (j = 0; j < num_samples; j++)
+			for (i = 0; i < num_nodes; i++)
 				if (signature_hash.count(signatures[INDEX(i, j, num_nodes)]) == 0)
 					signature_hash[signatures[INDEX(i, j, num_nodes)]] = num_labels++;
 
+		cout << num_labels << endl;
+
 		probabilities = (double *)(mxRealloc(probabilities, num_nodes * num_labels * sizeof(double)));
-		for (i = 0; i < num_nodes; i++)
-			for (j = 0; j < num_labels; j++)
+		for (j = 0; j < num_labels; j++)
+			for (i = 0; i < num_nodes; i++)
 				probabilities[INDEX(i, j, num_nodes)] = 0;
 
-		for (i = 0; i < num_nodes; i++)
-			for (j = 0; j < num_samples; j++)
+		for (j = 0; j < num_samples; j++)
+			for (i = 0; i < num_nodes; i++)
 				probabilities[INDEX(i, signature_hash[signatures[INDEX(i, j, num_nodes)]], num_nodes)] += (1 / num_samples);
 
 		signature_hash.empty();
