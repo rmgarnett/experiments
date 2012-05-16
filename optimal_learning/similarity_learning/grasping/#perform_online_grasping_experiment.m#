@@ -1,0 +1,21 @@
+prepare_grasping_data;
+
+h              = 2;
+train_fraction = 0.05;
+num_samples    = 100;
+lookahead      = 1;
+verbose        = true;
+k_fraction     = 5 / num_graphs;
+
+tolerance      = 1e-1;
+max_iterations = 10;
+
+setup_lp;
+
+reachable_ind   = find(node_labels ~= 3);
+unreachable_ind = find(node_labels == 3);
+
+num_reachable = numel(reachable_ind);
+
+
+perform_online_similarity_experiment;
