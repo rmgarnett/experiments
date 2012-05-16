@@ -3,18 +3,8 @@ function [results, elapsed] = perform_search_experiment(data, ...
           probability_bound, num_experiments, num_evaluations, ...
           max_lookahead, report)
 
-  %stream = RandStream('mt19937ar', 'seed', seed);
-  %RandStream.setDefaultStream(stream);
-
-  utility_function = @(data, responses, train_ind) ...
-      count_utility(responses, train_ind);
-
-  selection_functions = cell(max_lookahead, 1);
-  for i = 1:max_lookahead
-    selection_functions{i} = @(data, responses, train_ind) ...
-        optimal_search_bound_selector(data, responses, train_ind, ...
-            probability_function, probability_bound, i);
-  end
+  stream = RandStream('mt19937ar', 'seed', seed);
+  RandStream.setGlobalStream(stream);
 
   results = zeros(num_experiments, num_evaluations, max_lookahead);
   elapsed = zeros(num_experiments, max_lookahead);
@@ -29,13 +19,13 @@ function [results, elapsed] = perform_search_experiment(data, ...
     train_ind = [train_ind; logical_ind(responses ~= 1, r(1:(num_additional + 1)))];
 
     for lookahead = 1:max_lookahead
-      %tic;
-      [~, utilities] = optimal_learning(data, responses, train_ind, ...
-              utility_function, probability_function, selection_functions, ...
-              lookahead, num_evaluations, true);
+      start = tic;
+      [~, utilities] = active_search(data, responses, train_ind, ...
+              probability_function, probability_bound, lookahead, ...
+              num_evaluations, true);
       utilities = utilities - num_additional;
       results(experiment, :, lookahead) = utilities;
-      %elapsed(experiment, lookahead) = toc(start);
+      elapsed(experiment, lookahead) = toc(start);
 
       for i = 1:lookahead
         fprintf('experiment %i: %i-step utility: %i, mean: %.2f, took: %.2fs, mean: %.2fs', ...
