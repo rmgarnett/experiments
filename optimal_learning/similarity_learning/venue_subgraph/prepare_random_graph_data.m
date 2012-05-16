@@ -1,15 +1,30 @@
-%data = sprand(num_nodes, num_nodes, sparsity / 2);
-%data = max(data, data');
-%data = data - diag(diag(data));
-%data = full(double(data > 0));
+num_classes = 2;
 
-D = sum(data);
-D_normalize = diag(1 ./ sqrt(D));
+num_stars = 10;
+max_size = 20;
 
-%L = eye(num_nodes) - D_normalize * data * D_normalize;
-L = diag(D) - data;
+sizes = 1 + randi(max_size, num_stars, 1);
+star_edges = cumsum(sizes);
 
-K = inv(eye(num_nodes) + sigma^2 * L);
+num_nodes = sum(sizes);
 
-responses = randn(1, num_nodes) * chol(K) > 0;
-responses = responses(:) + 1;
+data = sparse(num_nodes, num_nodes);
+responses = zeros(num_nodes, 1);
+
+count = 1;
+for i = 1:num_stars
+  data(count:star_edges(i), count:star_edges(i)) = 1;
+  
+  responses(count:star_edges(i)) = randi(num_classes);
+  
+  count = count + sizes(i);
+end
+
+num_connections = 1000;
+for i = 1:num_connections
+  pair = randi(num_stars, 2);
+  data(star_edges(pair(1)), star_edges(pair(2))) = 1;
+end
+
+data = min(data, data');
+data = data - diag(diag(data));

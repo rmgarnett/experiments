@@ -1,5 +1,4 @@
-data_directory = '~/tmp/';
-%data_directory = '~/work/data/nips_papers/processed/venue_subgraph/';
+data_directory = '~/work/data/nips_papers/processed/venue_subgraph/';
 
 load([data_directory 'venue_subgraph.mat'], ...
      'connected', ...
@@ -12,3 +11,7 @@ num_edges = nnz(triu(data));
 
 responses = 2 * ones(num_nodes, 1);
 responses(connected_positive_node_ids) = 1;
+
+num_classes = 2;
+
+clear('connected', 'connected_positive_node_ids');
