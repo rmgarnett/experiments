@@ -1,0 +1,9 @@
+weights = sparse(edges(:, 1), edges(:, 2), 20 - edges(:, 3));
+max_weights = full(max(weights));
+
+probability_function = @(data, responses, train_ind, test_ind) ...
+    knn_probability(responses, train_ind, test_ind, weights, pseudocount);
+
+probability_bound = @(data, responses, train_ind, test_ind, num_positives) ...
+    knn_probability_bound(responses, train_ind, test_ind, weights, ...
+                          max_weights, pseudocount, num_positives);
