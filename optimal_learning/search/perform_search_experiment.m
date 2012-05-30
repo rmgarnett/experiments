@@ -13,8 +13,8 @@ function [utilities, elapsed] = perform_search_experiment(data, ...
 
   [~, utilities] = active_search(data, responses, train_ind, ...
           probability_function, probability_bound, lookahead, ...
-          num_evaluations, false);
-  utilities = utilities -  1;
+          num_evaluations, true);
+  utilities = utilities - 1;
   
   elapsed = toc(start);
 
@@ -25,5 +25,3 @@ function [utilities, elapsed] = perform_search_experiment(data, ...
             utilities(report(steps)));
   end
 end
-
-
